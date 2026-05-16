@@ -17,13 +17,13 @@ def cargar_leaderboard():
 
 def guardar_leaderboard(nombre, pasos, tiempo):
     datos = cargar_leaderboard()
-    datos.append({"Hacker": nombre, "Pasos": pasos, "Tiempo (seg)": round(tiempo, 2)})
-    datos = sorted(datos, key=lambda x: (x["Pasos"], x["Tiempo (seg)"]))
+    datos.append({"Hacker": nombre, "Pasos Totales": pasos, "Tiempo (seg)": round(tiempo, 2)})
+    datos = sorted(datos, key=lambda x: (x["Pasos Totales"], x["Tiempo (seg)"]))
     with open(ARCHIVO_LEADERBOARD, "w") as f:
         json.dump(datos, f)
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Cyber-Maze: Pseudografo Dirigido", layout="wide")
+st.set_page_config(page_title="Cyber-Maze: Nivel 40", layout="wide")
 
 # --- ESTADO DE LA SESIÓN ---
 if 'path' not in st.session_state:
@@ -33,44 +33,89 @@ if 'steps_taken' not in st.session_state:
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 if 'graph' not in st.session_state:
-    # Usamos MultiDiGraph: Permite direcciones, aristas paralelas y lazos.
     G = nx.MultiDiGraph() 
+    G.add_nodes_from(range(1, 41)) # Garantizamos 40 nodos exactos
     
-    # --- CONSTRUCCIÓN DEL GRAFO DEL TERROR ---
-    # Enlaces unidireccionales normales (origen, destino)
-    normal_edges = [
-        (1, 2), (1, 5), (1, 8), (2, 3), (3, 4), (4, 11), 
-        (5, 6), (6, 7), (7, 12), (8, 9), (9, 10), (10, 15),
-        (11, 16), (12, 16), (15, 14), (14, 13), (13, 18),
-        (16, 17), (17, 22), (22, 23), (23, 24), (24, 25),
-        (25, 20), (20, 19), (19, 28), (28, 29), (29, 30)
-    ]
-    G.add_edges_from(normal_edges)
+    # Funciones auxiliares para construir el mapa híbrido
+    def add_bidi(u, v, label="Bidireccional"):
+        G.add_edge(u, v, label=label)
+        G.add_edge(v, u, label=label)
+
+    def add_uni(u, v, label="Unidireccional"):
+        G.add_edge(u, v, label=label)
+
+    # --- LA RUTA MAESTRA (Oculta entre el caos) ---
+    add_bidi(1, 4)
+    add_bidi(4, 8)
+    add_bidi(8, 13)
+    add_uni(13, 17, "Unidireccional") # Cuello de botella
+    add_bidi(17, 21)
+    add_bidi(21, 26)
+    add_bidi(26, 30)
+    add_uni(30, 34, "Unidireccional") # Cuello de botella
+    add_bidi(34, 37)
+    add_bidi(37, 39)
+    add_bidi(39, 40)
+
+    # --- TRAMPAS, CALLEJONES Y BUCLES ---
+    # Desde el inicio
+    add_uni(1, 2)
+    add_bidi(2, 3)
+    add_uni(3, 3, "Loop Mortal") # Lazo
+    add_bidi(1, 6)
+    add_uni(6, 7)
+    add_uni(7, 2, "Trampa Retorno") 
+
+    # Desde el sector 4 al 12
+    add_bidi(4, 9)
+    add_bidi(9, 10)
+    add_bidi(10, 11)
+    add_uni(11, 11, "Loop Mortal")
+    add_bidi(8, 12)
+    add_uni(12, 16)
+    add_bidi(16, 20)
+    add_uni(20, 24)
+    add_uni(24, 24, "Loop Mortal")
+
+    # Ciclo infinito sector 13-15
+    add_bidi(13, 14)
+    add_bidi(14, 15)
+    add_uni(15, 13, "Retorno Oculto")
+
+    # Sector 17-29 (Engaños de retroceso)
+    add_bidi(21, 22)
+    add_uni(22, 17, "Caída libre")
+    add_uni(21, 25)
+    add_bidi(25, 29)
+    add_uni(29, 33) # Callejón sin salida
+    add_bidi(26, 27)
+    add_bidi(27, 28)
+    add_uni(28, 23)
+    add_uni(23, 18)
+    add_uni(18, 19)
+    add_uni(19, 13, "Trampa Retorno Masivo")
+
+    # Sector final 30-40
+    add_bidi(30, 31)
+    add_bidi(31, 32)
+    add_uni(32, 26, "Retorno")
+    add_bidi(34, 35)
+    add_bidi(38, 35)
+    add_uni(35, 36)
+    add_uni(36, 36, "Loop Mortal")
+    add_uni(39, 38)
     
-    # 1. Enlaces Trampa Unidireccionales (Te dejan sin salida)
-    G.add_edges_from([(4, 5), (12, 11), (17, 18), (24, 29)]) # 24 a 29 parece un atajo, pero 29 es unidireccional y bloquea.
-    
-    # 2. Lazos (Self-loops - Errores de routing)
-    G.add_edges_from([(3, 3), (9, 9), (16, 16), (22, 22)])
-    
-    # 3. Aristas Paralelas (Múltiples puertos entre dos nodos)
-    # Entre el 7 y el 8 hay dos cables. Uno va de 7->8, otro de 8->7.
-    G.add_edge(7, 8, label="Puerto 80")
-    G.add_edge(8, 7, label="Puerto 443")
-    # Entre 25 y 26 hay dos aristas en la MISMA dirección (Paralelas puras)
-    G.add_edge(25, 26, label="Cable A")
-    G.add_edge(25, 26, label="Cable B")
-    G.add_edge(26, 27)
-    G.add_edge(27, 30) # Ruta alterna escondida
-    
+    # Arista paralela (Dos cables distintos entre 17 y 21)
+    add_uni(17, 21, "Cable Secundario")
+
     st.session_state.graph = G
 
-st.title("☠️ Protocolo Pseudografo: El Laberinto de un Solo Sentido")
+st.title("☠️ Cyber-Maze 40: El Grafo Híbrido")
 st.markdown("""
-**Misión:** Lleva el paquete desde el **Nodo 1** hasta el **Nodo 30**.
-⚠️ **ADVERTENCIA TÉCNICA:** * **Grafo Dirigido:** Las flechas indican el ÚNICO sentido permitido.
-* **Lazos:** Si te haces ping a ti mismo (ej. 3->3), pierdes un paso.
-* **Cables Paralelos:** Algunos nodos tienen múltiples conexiones al mismo destino o en contravía.
+**Misión:** Lleva el paquete desde el **Nodo 1** hasta el **Nodo 40**.
+⚠️ **REGLAS DEL SISTEMA:** * Existen enlaces **Bidireccionales** (puedes ir y volver) y **Unidireccionales** (solo ida).
+* Si te atascas, puedes usar código de retroceso (+1 paso) o **Reiniciar el sistema entero**. 
+* **ATENCIÓN:** Si reinicias, vuelves al Nodo 1, pero **TUS PASOS SE CONSERVAN Y SE TE SUMAN +5 DE PENALIZACIÓN**. ¡Piensa antes de moverte!
 """)
 
 col1, col2 = st.columns([2, 1])
@@ -79,29 +124,28 @@ with col1:
     G = st.session_state.graph
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO MULTIDIRIGIDO ---
-    fig, ax = plt.subplots(figsize=(9, 7))
-    pos = nx.spring_layout(G, seed=123, k=0.6) 
+    # --- RENDERIZADO DEL GRAFO ---
+    fig, ax = plt.subplots(figsize=(12, 9)) # Más grande para 40 nodos
+    pos = nx.spring_layout(G, seed=42, k=0.55) 
 
     node_colors = []
     for node in G.nodes():
-        if node == 1: node_colors.append('#f1c40f') # Inicio
-        elif node == 30: node_colors.append('#9b59b6') # Meta
-        elif path and node == path[-1]: node_colors.append('#3498db') # Actual
-        elif node in path: node_colors.append('#2ecc71') # Rastro
-        else: node_colors.append('#34495e') # Desconocido
+        if node == 1: node_colors.append('#f1c40f') 
+        elif node == 40: node_colors.append('#9b59b6') 
+        elif path and node == path[-1]: node_colors.append('#3498db') 
+        elif node in path: node_colors.append('#2ecc71') 
+        else: node_colors.append('#34495e') 
             
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=600, ax=ax)
-    nx.draw_networkx_labels(G, pos, font_color='white', font_size=10, font_weight='bold', ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=400, ax=ax)
+    nx.draw_networkx_labels(G, pos, font_color='white', font_size=8, font_weight='bold', ax=ax)
     
-    # Dibujar aristas con flechas y curvas para notar las paralelas y lazos
     nx.draw_networkx_edges(
         G, pos, 
         edge_color='#bdc3c7', 
         arrows=True, 
         arrowstyle='-|>', 
-        arrowsize=18, 
-        connectionstyle='arc3,rad=0.2', # Esta curva es magia, permite ver aristas paralelas y bidireccionales
+        arrowsize=12, 
+        connectionstyle='arc3,rad=0.15', 
         ax=ax
     )
 
@@ -111,80 +155,73 @@ with col1:
     # --- LÓGICA DEL JUEGO ---
     current_node = path[-1]
     
-    if len(path) == 1 and st.session_state.start_time is None:
-         st.info("El reloj está en cero. Analiza las flechas antes de moverte...")
+    if len(path) == 1 and st.session_state.start_time is None and st.session_state.steps_taken == 0:
+         st.info("El reloj está en cero. Analiza el mapa antes de tu primer movimiento...")
     
-    st.subheader(f"📡 Terminal: Nodo {current_node} | 👣 Pasos: {st.session_state.steps_taken}")
+    st.subheader(f"📡 Terminal: Nodo {current_node} | 👣 Pasos Acumulados: {st.session_state.steps_taken}")
     
-    if current_node == 30:
+    if current_node == 40:
         tiempo_total = time.time() - st.session_state.start_time
-        st.success(f"¡SISTEMA HACKEADO! Pasos: {st.session_state.steps_taken} | Tiempo: {round(tiempo_total, 2)} s.")
+        st.success(f"¡SISTEMA HACKEADO! Pasos Totales: {st.session_state.steps_taken} | Tiempo: {round(tiempo_total, 2)} s.")
         st.balloons()
         
         with st.form("leaderboard_form"):
             nombre_jugador = st.text_input("Ingresa tu alias de Hacker:")
-            if st.form_submit_button("Guardar Código") and nombre_jugador:
+            if st.form_submit_button("Guardar Récord") and nombre_jugador:
                 guardar_leaderboard(nombre_jugador, st.session_state.steps_taken, tiempo_total)
                 st.success("¡Base de datos actualizada!")
                 st.session_state.path = [1]
                 st.session_state.steps_taken = 0
                 st.session_state.start_time = None
                 st.rerun()
-                
-        if st.button("Reinicio rápido"):
-            st.session_state.path = [1]
-            st.session_state.steps_taken = 0
-            st.session_state.start_time = None
-            st.rerun()
     else:
-        # Obtener los puertos de salida (Out-edges en un grafo dirigido)
         out_edges = list(G.out_edges(current_node, data=True))
         
-        # Filtrar destinos válidos (no repetir nodos a menos que sea un lazo engañoso)
         valid_moves = []
         for u, v, data in out_edges:
-            # Puedes caer en un lazo, o ir a un nodo no visitado
-            if v not in path or v == current_node:
-                valid_moves.append((v, data.get('label', f"Enlace estándar")))
+            # En este modo duro, PUEDEN repetir nodos para desatascarse, 
+            # pero cada movimiento les cuesta 1 paso.
+            valid_moves.append((v, data.get('label', f"Enlace estándar")))
                 
         if not valid_moves:
-            st.error("⚠️ FATAL ERROR: Llegaste a un nodo sin salidas válidas. Cortafuegos activado. ¡Retrocede!")
+            st.error("⚠️ FATAL ERROR: Nodo sin salida. Estás obligado a usar código de retroceso o reiniciar.")
         else:
-            st.write("Puertos abiertos descubiertos (Sigue las flechas):")
+            st.write("Puertos abiertos descubiertos:")
             cols = st.columns(min(len(valid_moves), 4))
             for i, (target, label) in enumerate(valid_moves):
-                # Distribuir botones en columnas
                 col = cols[i % len(cols)]
-                if col.button(f"Mover al Nodo {target}\n({label})", key=f"btn_{i}_{target}"):
+                if col.button(f"Mover al {target}\n({label})", key=f"btn_{i}_{target}"):
                     if st.session_state.start_time is None:
                         st.session_state.start_time = time.time()
                     
                     if target == current_node:
-                        st.warning("¡Bucle detectado! Hiciste ping a ti mismo. Pierdes 1 paso.")
-                        st.session_state.steps_taken += 1
-                    else:
-                        st.session_state.path.append(target)
-                        st.session_state.steps_taken += 1
+                        st.warning("¡Bucle detectado! Hiciste ping a ti mismo.")
+                    
+                    st.session_state.path.append(target)
+                    st.session_state.steps_taken += 1
                     st.rerun()
                     
         st.write("")
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if len(path) > 1:
-                if st.button("⬅️ Inyectar código de retroceso (+1 paso penalización)"):
+                if st.button("⬅️ Deshacer movimiento (+1 paso penalización)"):
                     st.session_state.path.pop()
                     st.session_state.steps_taken += 1
                     st.rerun()
         with col_btn2:
-            if st.button("🛑 Formatear (Reinicio total)", type="secondary"):
+            if st.button("🛑 Reinicio de Sistema (+5 pasos de penalización)", type="primary"):
+                # ¡AQUÍ ESTÁ LA MAGIA! El path vuelve a 1, pero los pasos NO se borran.
                 st.session_state.path = [1]
-                st.session_state.steps_taken = 0
-                st.session_state.start_time = None
+                st.session_state.steps_taken += 5 
+                # El tiempo sigue corriendo
+                if st.session_state.start_time is None:
+                    st.session_state.start_time = time.time()
                 st.rerun()
 
 with col2:
     st.subheader("🏆 Elite Global")
-    st.write("*(Ordenado por menos pasos)*")
+    st.write("*(Ordenado por MENOS pasos totales acumulados)*")
     datos_leaderboard = cargar_leaderboard()
     
     if datos_leaderboard:
