@@ -30,11 +30,13 @@ if 'path' not in st.session_state:
     st.session_state.path = [1]
 if 'steps_taken' not in st.session_state:
     st.session_state.steps_taken = 0
+if 'penalties' not in st.session_state:
+    st.session_state.penalties = 0  # <- NUEVO CONTADOR DE CASTIGOS JUSTOS
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
 # NUEVO NOMBRE DE VARIABLE PARA FORZAR LA ACTUALIZACIÓN DEL DIBUJO
-if 'grafo_40_v2' not in st.session_state:
+if 'grafo_40_v3' not in st.session_state:
     G = nx.MultiDiGraph() 
     G.add_nodes_from(range(1, 41)) 
     
@@ -103,28 +105,29 @@ if 'grafo_40_v2' not in st.session_state:
     
     add_uni(17, 21, "Cable Secundario")
 
-    st.session_state.grafo_40_v2 = G
+    st.session_state.grafo_40_v3 = G
 
 st.title("☠️ Cyber-Maze 40: El Grafo Híbrido")
 st.markdown("""
 **Misión:** Lleva el paquete desde el **Nodo 1** hasta el **Nodo 40**.
 ⚠️ **REGLAS DEL SISTEMA:** * Existen enlaces **Bidireccionales** (puedes ir y volver) y **Unidireccionales** (solo ida).
-* Si te atascas, puedes usar código de retroceso (+1 paso) o **Reiniciar el sistema entero**. 
-* **ATENCIÓN:** Si reinicias, vuelves al Nodo 1, pero **TUS PASOS SE CONSERVAN Y SE TE SUMAN +5 DE PENALIZACIÓN**. ¡Piensa antes de moverte!
+* Si te atascas, puedes usar el código de retroceso (+1 paso).
+* **ATENCIÓN:** Si decides **Reiniciar**, tu camino vuelve a cero, pero se te suma un castigo directo de **+5 pasos** a tu marcador final. ¡Úsalo sabiamente!
 """)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.grafo_40_v2
+    G = st.session_state.grafo_40_v3
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO (AQUÍ ESTÁ LA MAGIA DEL ESPACIO) ---
-    # 1. Ampliamos el lienzo de (14, 10) a (16, 12)
-    fig, ax = plt.subplots(figsize=(16, 12)) 
+    # --- RENDERIZADO DEL GRAFO ---
+    # 1. Ampliamos aún más el lienzo a (18, 12)
+    fig, ax = plt.subplots(figsize=(18, 12)) 
     
-    # 2. Aumentamos la fuerza de separación "k" a 1.2 y las iteraciones para que se alejen más
-    pos = nx.spring_layout(G, seed=77, k=1.2, iterations=150) 
+    # 2. Aumentamos la fuerza de repulsión 'k' a 2.8 y cambiamos la semilla (seed=150)
+    # Esto empujará esos nodos amontonados (34, 35, 37, 38) lejos unos de otros
+    pos = nx.spring_layout(G, seed=150, k=2.8, iterations=300) 
 
     node_colors = []
     for node in G.nodes():
@@ -134,17 +137,15 @@ with col1:
         elif node in path: node_colors.append('#2ecc71') 
         else: node_colors.append('#34495e') 
             
-    # 3. Redujimos un poco el tamaño del nodo para que las flechas resalten más
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=300, ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=320, ax=ax)
     nx.draw_networkx_labels(G, pos, font_color='white', font_size=8, font_weight='bold', ax=ax)
     
-    # 4. Aumentamos la curva (rad=0.25) para separar visualmente las líneas bidireccionales
     nx.draw_networkx_edges(
         G, pos, 
         edge_color='#bdc3c7', 
         arrows=True, 
         arrowstyle='-|>', 
-        arrowsize=15, 
+        arrowsize=16, 
         connectionstyle='arc3,rad=0.25', 
         ax=ax
     )
@@ -155,23 +156,28 @@ with col1:
     # --- LÓGICA DEL JUEGO ---
     current_node = path[-1]
     
-    if len(path) == 1 and st.session_state.start_time is None and st.session_state.steps_taken == 0:
+    # Calculamos el puntaje total en vivo
+    total_pasos = st.session_state.steps_taken + st.session_state.penalties
+    
+    if len(path) == 1 and st.session_state.start_time is None and total_pasos == 0:
          st.info("El reloj está en cero. Analiza el mapa antes de tu primer movimiento...")
     
-    st.subheader(f"📡 Terminal: Nodo {current_node} | 👣 Pasos Acumulados: {st.session_state.steps_taken}")
+    st.subheader(f"📡 Terminal: Nodo {current_node} | 👣 Pasos Acumulados: {total_pasos} (Penalidades: {st.session_state.penalties})")
     
     if current_node == 40:
         tiempo_total = time.time() - st.session_state.start_time
-        st.success(f"¡SISTEMA HACKEADO! Pasos Totales: {st.session_state.steps_taken} | Tiempo: {round(tiempo_total, 2)} s.")
+        st.success(f"¡SISTEMA HACKEADO! Pasos Totales: {total_pasos} | Tiempo: {round(tiempo_total, 2)} s.")
         st.balloons()
         
         with st.form("leaderboard_form"):
             nombre_jugador = st.text_input("Ingresa tu alias de Hacker:")
             if st.form_submit_button("Guardar Récord") and nombre_jugador:
-                guardar_leaderboard(nombre_jugador, st.session_state.steps_taken, tiempo_total)
+                guardar_leaderboard(nombre_jugador, total_pasos, tiempo_total)
                 st.success("¡Base de datos actualizada!")
+                # Reset total tras ganar
                 st.session_state.path = [1]
                 st.session_state.steps_taken = 0
+                st.session_state.penalties = 0
                 st.session_state.start_time = None
                 st.rerun()
     else:
@@ -208,16 +214,18 @@ with col1:
                     st.session_state.steps_taken += 1
                     st.rerun()
         with col_btn2:
-            if st.button("🛑 Reinicio de Sistema (+5 pasos de penalización)", type="primary"):
+            if st.button("🛑 Reinicio de Sistema (Solo cuesta +5 pasos)", type="primary"):
+                # ¡MAGIA JUSTA! Borramos los pasos del intento fallido, y solo sumamos 5 de castigo.
                 st.session_state.path = [1]
-                st.session_state.steps_taken += 5 
+                st.session_state.steps_taken = 0 
+                st.session_state.penalties += 5 
                 if st.session_state.start_time is None:
                     st.session_state.start_time = time.time()
                 st.rerun()
 
 with col2:
     st.subheader("🏆 Elite Global")
-    st.write("*(Ordenado por MENOS pasos totales acumulados)*")
+    st.write("*(Ordenado por MENOS pasos totales)*")
     datos_leaderboard = cargar_leaderboard()
     
     if datos_leaderboard:
