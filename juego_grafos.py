@@ -7,7 +7,7 @@ import time
 import pandas as pd
 
 # --- FUNCIONES DE BASE DE DATOS (LEADERBOARD) ---
-ARCHIVO_LEADERBOARD = "leaderboard.json"
+ARCHIVO_LEADERBOARD = "leaderboard_oficial.json"
 
 def cargar_leaderboard():
     if os.path.exists(ARCHIVO_LEADERBOARD):
