@@ -31,12 +31,11 @@ if 'path' not in st.session_state:
 if 'steps_taken' not in st.session_state:
     st.session_state.steps_taken = 0
 if 'penalties' not in st.session_state:
-    st.session_state.penalties = 0  # <- NUEVO CONTADOR DE CASTIGOS JUSTOS
+    st.session_state.penalties = 0  
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
-# NUEVO NOMBRE DE VARIABLE PARA FORZAR LA ACTUALIZACIÓN DEL DIBUJO
-if 'grafo_40_v3' not in st.session_state:
+if 'grafo_40_v4' not in st.session_state:
     G = nx.MultiDiGraph() 
     G.add_nodes_from(range(1, 41)) 
     
@@ -105,28 +104,23 @@ if 'grafo_40_v3' not in st.session_state:
     
     add_uni(17, 21, "Cable Secundario")
 
-    st.session_state.grafo_40_v3 = G
+    st.session_state.grafo_40_v4 = G
 
 st.title("☠️ Cyber-Maze 40: El Grafo Híbrido")
 st.markdown("""
 **Misión:** Lleva el paquete desde el **Nodo 1** hasta el **Nodo 40**.
 ⚠️ **REGLAS DEL SISTEMA:** * Existen enlaces **Bidireccionales** (puedes ir y volver) y **Unidireccionales** (solo ida).
-* Si te atascas, puedes usar el código de retroceso (+1 paso).
-* **ATENCIÓN:** Si decides **Reiniciar**, tu camino vuelve a cero, pero se te suma un castigo directo de **+5 pasos** a tu marcador final. ¡Úsalo sabiamente!
+* **ATENCIÓN:** En este sistema no existe el "Ctrl+Z". Si te metes en un callejón sin salida, tu única opción es **Reiniciar** el sistema. Al hacerlo, vuelves al Nodo 1 y se te suma un castigo directo de **+5 pasos** a tu marcador final. ¡Piensa antes de moverte!
 """)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.grafo_40_v3
+    G = st.session_state.grafo_40_v4
     path = st.session_state.path
 
     # --- RENDERIZADO DEL GRAFO ---
-    # 1. Ampliamos aún más el lienzo a (18, 12)
     fig, ax = plt.subplots(figsize=(18, 12)) 
-    
-    # 2. Aumentamos la fuerza de repulsión 'k' a 2.8 y cambiamos la semilla (seed=150)
-    # Esto empujará esos nodos amontonados (34, 35, 37, 38) lejos unos de otros
     pos = nx.spring_layout(G, seed=150, k=2.8, iterations=300) 
 
     node_colors = []
@@ -156,11 +150,10 @@ with col1:
     # --- LÓGICA DEL JUEGO ---
     current_node = path[-1]
     
-    # Calculamos el puntaje total en vivo
     total_pasos = st.session_state.steps_taken + st.session_state.penalties
     
     if len(path) == 1 and st.session_state.start_time is None and total_pasos == 0:
-         st.info("El reloj está en cero. Analiza el mapa antes de tu primer movimiento...")
+         st.info("El reloj está en cero. Analiza las flechas antes de tu primer movimiento...")
     
     st.subheader(f"📡 Terminal: Nodo {current_node} | 👣 Pasos Acumulados: {total_pasos} (Penalidades: {st.session_state.penalties})")
     
@@ -174,7 +167,6 @@ with col1:
             if st.form_submit_button("Guardar Récord") and nombre_jugador:
                 guardar_leaderboard(nombre_jugador, total_pasos, tiempo_total)
                 st.success("¡Base de datos actualizada!")
-                # Reset total tras ganar
                 st.session_state.path = [1]
                 st.session_state.steps_taken = 0
                 st.session_state.penalties = 0
@@ -188,9 +180,9 @@ with col1:
             valid_moves.append((v, data.get('label', f"Enlace estándar")))
                 
         if not valid_moves:
-            st.error("⚠️ FATAL ERROR: Nodo sin salida. Estás obligado a usar código de retroceso o reiniciar.")
+            st.error("⚠️ FATAL ERROR: Nodo sin salida. Te bloqueaste a ti mismo. Tu única opción es reiniciar el sistema.")
         else:
-            st.write("Puertos abiertos descubiertos:")
+            st.write("Puertos abiertos descubiertos (Sigue las flechas):")
             cols = st.columns(min(len(valid_moves), 4))
             for i, (target, label) in enumerate(valid_moves):
                 col = cols[i % len(cols)]
@@ -206,22 +198,14 @@ with col1:
                     st.rerun()
                     
         st.write("")
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if len(path) > 1:
-                if st.button("⬅️ Deshacer movimiento (+1 paso penalización)"):
-                    st.session_state.path.pop()
-                    st.session_state.steps_taken += 1
-                    st.rerun()
-        with col_btn2:
-            if st.button("🛑 Reinicio de Sistema (Solo cuesta +5 pasos)", type="primary"):
-                # ¡MAGIA JUSTA! Borramos los pasos del intento fallido, y solo sumamos 5 de castigo.
-                st.session_state.path = [1]
-                st.session_state.steps_taken = 0 
-                st.session_state.penalties += 5 
-                if st.session_state.start_time is None:
-                    st.session_state.start_time = time.time()
-                st.rerun()
+        # ÚNICO BOTÓN RESTANTE: REINICIAR
+        if st.button("🛑 Reinicio de Sistema (Castigo: +5 pasos)", type="primary", use_container_width=True):
+            st.session_state.path = [1]
+            st.session_state.steps_taken = 0 
+            st.session_state.penalties += 5 
+            if st.session_state.start_time is None:
+                st.session_state.start_time = time.time()
+            st.rerun()
 
 with col2:
     st.subheader("🏆 Elite Global")
