@@ -25,18 +25,19 @@ def guardar_leaderboard(nombre, pasos, tiempo):
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Cyber-Maze: Nivel 40", layout="wide")
 
-# --- ESTADO DE LA SESIÓN ---
+# --- ESTADO DE LA SESIÓN (AQUÍ ESTABA EL ERROR DE MEMORIA) ---
 if 'path' not in st.session_state:
     st.session_state.path = [1]
 if 'steps_taken' not in st.session_state:
     st.session_state.steps_taken = 0
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
-if 'graph' not in st.session_state:
+
+# CAMBIAMOS EL NOMBRE A 'grafo_40' PARA FORZAR EL REINICIO DEL DIBUJO
+if 'grafo_40' not in st.session_state:
     G = nx.MultiDiGraph() 
     G.add_nodes_from(range(1, 41)) # Garantizamos 40 nodos exactos
     
-    # Funciones auxiliares para construir el mapa híbrido
     def add_bidi(u, v, label="Bidireccional"):
         G.add_edge(u, v, label=label)
         G.add_edge(v, u, label=label)
@@ -44,29 +45,27 @@ if 'graph' not in st.session_state:
     def add_uni(u, v, label="Unidireccional"):
         G.add_edge(u, v, label=label)
 
-    # --- LA RUTA MAESTRA (Oculta entre el caos) ---
+    # --- LA RUTA MAESTRA ---
     add_bidi(1, 4)
     add_bidi(4, 8)
     add_bidi(8, 13)
-    add_uni(13, 17, "Unidireccional") # Cuello de botella
+    add_uni(13, 17, "Unidireccional") 
     add_bidi(17, 21)
     add_bidi(21, 26)
     add_bidi(26, 30)
-    add_uni(30, 34, "Unidireccional") # Cuello de botella
+    add_uni(30, 34, "Unidireccional") 
     add_bidi(34, 37)
     add_bidi(37, 39)
     add_bidi(39, 40)
 
     # --- TRAMPAS, CALLEJONES Y BUCLES ---
-    # Desde el inicio
     add_uni(1, 2)
     add_bidi(2, 3)
-    add_uni(3, 3, "Loop Mortal") # Lazo
+    add_uni(3, 3, "Loop Mortal") 
     add_bidi(1, 6)
     add_uni(6, 7)
     add_uni(7, 2, "Trampa Retorno") 
 
-    # Desde el sector 4 al 12
     add_bidi(4, 9)
     add_bidi(9, 10)
     add_bidi(10, 11)
@@ -77,17 +76,15 @@ if 'graph' not in st.session_state:
     add_uni(20, 24)
     add_uni(24, 24, "Loop Mortal")
 
-    # Ciclo infinito sector 13-15
     add_bidi(13, 14)
     add_bidi(14, 15)
     add_uni(15, 13, "Retorno Oculto")
 
-    # Sector 17-29 (Engaños de retroceso)
     add_bidi(21, 22)
     add_uni(22, 17, "Caída libre")
     add_uni(21, 25)
     add_bidi(25, 29)
-    add_uni(29, 33) # Callejón sin salida
+    add_uni(29, 33) 
     add_bidi(26, 27)
     add_bidi(27, 28)
     add_uni(28, 23)
@@ -95,7 +92,6 @@ if 'graph' not in st.session_state:
     add_uni(18, 19)
     add_uni(19, 13, "Trampa Retorno Masivo")
 
-    # Sector final 30-40
     add_bidi(30, 31)
     add_bidi(31, 32)
     add_uni(32, 26, "Retorno")
@@ -105,10 +101,9 @@ if 'graph' not in st.session_state:
     add_uni(36, 36, "Loop Mortal")
     add_uni(39, 38)
     
-    # Arista paralela (Dos cables distintos entre 17 y 21)
     add_uni(17, 21, "Cable Secundario")
 
-    st.session_state.graph = G
+    st.session_state.grafo_40 = G
 
 st.title("☠️ Cyber-Maze 40: El Grafo Híbrido")
 st.markdown("""
@@ -121,12 +116,13 @@ st.markdown("""
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.graph
+    # LLAMAMOS AL NUEVO GRAFO
+    G = st.session_state.grafo_40
     path = st.session_state.path
 
     # --- RENDERIZADO DEL GRAFO ---
-    fig, ax = plt.subplots(figsize=(12, 9)) # Más grande para 40 nodos
-    pos = nx.spring_layout(G, seed=42, k=0.55) 
+    fig, ax = plt.subplots(figsize=(14, 10)) 
+    pos = nx.spring_layout(G, seed=42, k=0.45) 
 
     node_colors = []
     for node in G.nodes():
@@ -136,7 +132,7 @@ with col1:
         elif node in path: node_colors.append('#2ecc71') 
         else: node_colors.append('#34495e') 
             
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=400, ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=350, ax=ax)
     nx.draw_networkx_labels(G, pos, font_color='white', font_size=8, font_weight='bold', ax=ax)
     
     nx.draw_networkx_edges(
@@ -144,7 +140,7 @@ with col1:
         edge_color='#bdc3c7', 
         arrows=True, 
         arrowstyle='-|>', 
-        arrowsize=12, 
+        arrowsize=14, 
         connectionstyle='arc3,rad=0.15', 
         ax=ax
     )
@@ -179,8 +175,6 @@ with col1:
         
         valid_moves = []
         for u, v, data in out_edges:
-            # En este modo duro, PUEDEN repetir nodos para desatascarse, 
-            # pero cada movimiento les cuesta 1 paso.
             valid_moves.append((v, data.get('label', f"Enlace estándar")))
                 
         if not valid_moves:
@@ -211,10 +205,8 @@ with col1:
                     st.rerun()
         with col_btn2:
             if st.button("🛑 Reinicio de Sistema (+5 pasos de penalización)", type="primary"):
-                # ¡AQUÍ ESTÁ LA MAGIA! El path vuelve a 1, pero los pasos NO se borran.
                 st.session_state.path = [1]
                 st.session_state.steps_taken += 5 
-                # El tiempo sigue corriendo
                 if st.session_state.start_time is None:
                     st.session_state.start_time = time.time()
                 st.rerun()
