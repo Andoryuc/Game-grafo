@@ -25,7 +25,7 @@ def guardar_leaderboard(nombre, pasos, tiempo):
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Cyber-Maze: Nivel 40", layout="wide")
 
-# --- ESTADO DE LA SESIÓN (AQUÍ ESTABA EL ERROR DE MEMORIA) ---
+# --- ESTADO DE LA SESIÓN ---
 if 'path' not in st.session_state:
     st.session_state.path = [1]
 if 'steps_taken' not in st.session_state:
@@ -33,10 +33,10 @@ if 'steps_taken' not in st.session_state:
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
-# CAMBIAMOS EL NOMBRE A 'grafo_40' PARA FORZAR EL REINICIO DEL DIBUJO
-if 'grafo_40' not in st.session_state:
+# NUEVO NOMBRE DE VARIABLE PARA FORZAR LA ACTUALIZACIÓN DEL DIBUJO
+if 'grafo_40_v2' not in st.session_state:
     G = nx.MultiDiGraph() 
-    G.add_nodes_from(range(1, 41)) # Garantizamos 40 nodos exactos
+    G.add_nodes_from(range(1, 41)) 
     
     def add_bidi(u, v, label="Bidireccional"):
         G.add_edge(u, v, label=label)
@@ -103,7 +103,7 @@ if 'grafo_40' not in st.session_state:
     
     add_uni(17, 21, "Cable Secundario")
 
-    st.session_state.grafo_40 = G
+    st.session_state.grafo_40_v2 = G
 
 st.title("☠️ Cyber-Maze 40: El Grafo Híbrido")
 st.markdown("""
@@ -116,13 +116,15 @@ st.markdown("""
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # LLAMAMOS AL NUEVO GRAFO
-    G = st.session_state.grafo_40
+    G = st.session_state.grafo_40_v2
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO ---
-    fig, ax = plt.subplots(figsize=(14, 10)) 
-    pos = nx.spring_layout(G, seed=42, k=0.45) 
+    # --- RENDERIZADO DEL GRAFO (AQUÍ ESTÁ LA MAGIA DEL ESPACIO) ---
+    # 1. Ampliamos el lienzo de (14, 10) a (16, 12)
+    fig, ax = plt.subplots(figsize=(16, 12)) 
+    
+    # 2. Aumentamos la fuerza de separación "k" a 1.2 y las iteraciones para que se alejen más
+    pos = nx.spring_layout(G, seed=77, k=1.2, iterations=150) 
 
     node_colors = []
     for node in G.nodes():
@@ -132,16 +134,18 @@ with col1:
         elif node in path: node_colors.append('#2ecc71') 
         else: node_colors.append('#34495e') 
             
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=350, ax=ax)
+    # 3. Redujimos un poco el tamaño del nodo para que las flechas resalten más
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=300, ax=ax)
     nx.draw_networkx_labels(G, pos, font_color='white', font_size=8, font_weight='bold', ax=ax)
     
+    # 4. Aumentamos la curva (rad=0.25) para separar visualmente las líneas bidireccionales
     nx.draw_networkx_edges(
         G, pos, 
         edge_color='#bdc3c7', 
         arrows=True, 
         arrowstyle='-|>', 
-        arrowsize=14, 
-        connectionstyle='arc3,rad=0.15', 
+        arrowsize=15, 
+        connectionstyle='arc3,rad=0.25', 
         ax=ax
     )
 
