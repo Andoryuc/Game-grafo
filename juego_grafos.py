@@ -106,7 +106,7 @@ if 'grafo_40_v4' not in st.session_state:
 
     st.session_state.grafo_40_v4 = G
 
-st.title("La Pesadilla de Dijkstra")
+st.title("💀 La Pesadilla de Dijkstra 💀")
 st.markdown("""
 **Misión:** Lleva el paquete desde el **Nodo 1** hasta el **Nodo 40**.
 ⚠️ **REGLAS DEL SISTEMA:** * Existen enlaces **Bidireccionales** (puedes ir y volver) y **Unidireccionales** (solo ida).
