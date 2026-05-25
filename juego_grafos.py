@@ -152,23 +152,21 @@ if 'grafo_exacto' not in st.session_state:
 
     st.session_state.grafo_exacto = G
 
-# --- LAYOUT ---
+# --- LAYOUT --- coordenadas más espaciadas
 pos = {
-    "Casa": (0, 6),
-    "V1":  (2, 8),   "V2":  (2, 6),   "V3":  (2, 4),
-    "V4":  (4, 9),   "V5":  (4, 7),   "V6":  (4, 5),   "V7":  (4, 3),
-    "V8":  (6, 9),   "V9":  (6, 7),   "V10": (6, 5),   "V11": (6, 3),  "V12": (6, 1),
-    "V13": (8, 8.5), "V14": (8, 6),   "V15": (8, 4),   "V16": (8, 2),
-    "V17": (10, 7.5),"V18": (10, 5.5),"V19": (10, 3.5),"V20": (10, 1.5),
-    "UDES": (12, 4.5),
-    # Cebos: posiciones naturales dentro del flujo del grafo
-    "V21": (7, 8),    # Entre V8/V13 y zona alta — parece nodo de paso
-    "V22": (9, 5),    # Entre V14 y V17/V18 — parece puente
-    "V23": (11, 6),   # Junto a UDES — parece entrada alternativa
-    # Dead-ends: posicionados como si fueran destinos normales
-    "V24": (7, 6.2),  # Cerca de V9/V14 — no se ve aislado
-    "V25": (9, 3),    # Cerca de V15/V19 — parece nodo inferior legítimo
-    "V26": (12, 6),   # Cerca de UDES — parece otra entrada a UDES
+    "Casa": (0,  10),
+    "V1":  (3,  14),  "V2":  (3,  10),  "V3":  (3,   6),
+    "V4":  (6,  17),  "V5":  (6,  12),  "V6":  (6,   8),  "V7":  (6,  4),
+    "V8":  (9,  18),  "V9":  (9,  12),  "V10": (9,   8),  "V11": (9,  4),  "V12": (9, 1),
+    "V13": (12, 16),  "V14": (12, 10),  "V15": (12,  6),  "V16": (12, 2),
+    "V17": (16, 14),  "V18": (16,  9),  "V19": (16,  5),  "V20": (16, 1),
+    "UDES": (20, 8),
+    "V21": (10.5, 15.5),
+    "V22": (14,   7.5),
+    "V23": (18,  11.5),
+    "V24": (10.5, 11),
+    "V25": (14,   3.5),
+    "V26": (20,  12),
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -178,15 +176,15 @@ def draw_edge_label(ax, p1, p2, texto, offset_perp=0.0, color='#dc2626'):
     """Dibuja etiqueta de peso en el punto medio de una arista, con desplazamiento perpendicular."""
     mx = (p1[0] + p2[0]) / 2
     my = (p1[1] + p2[1]) / 2
-    # Vector perpendicular
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
     length = max(np.hypot(dx, dy), 1e-9)
     nx_ = -dy / length
     ny_ =  dx / length
     ax.text(mx + nx_ * offset_perp, my + ny_ * offset_perp,
-            texto, color=color, fontsize=9, fontweight='bold',
-            ha='center', va='center', bbox=dict(alpha=0))
+            texto, color=color, fontsize=10, fontweight='bold',
+            ha='center', va='center',
+            bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.75))
 
 
 def draw_curved_no_arrow(ax, p1, p2, rad, color, linewidth=1.5):
@@ -233,7 +231,7 @@ with col1:
     G   = st.session_state.grafo_exacto
     path = st.session_state.path
 
-    fig, ax = plt.subplots(figsize=(16, 10))
+    fig, ax = plt.subplots(figsize=(22, 13))
 
     # ── Colores de nodos ──────────────────────────────────────────────────────
     node_colors = []
@@ -247,7 +245,7 @@ with col1:
         else:
             node_colors.append('#1f2937')
 
-    NODE_SIZE  = 1000
+    NODE_SIZE  = 1200
     EDGE_COLOR = '#94a3b8'
     TEXT_COLOR = '#dc2626'
 
@@ -270,7 +268,7 @@ with col1:
                 edge_color=EDGE_COLOR, width=1.5,
                 node_size=NODE_SIZE, min_target_margin=16, ax=ax
             )
-            draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.18)
+            draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.35)
 
         # ---- Arista paralela (dos curvas arqueadas opuestas, sin flecha) -------
         elif tipo == 'parallel':
@@ -283,8 +281,9 @@ with col1:
                 node_size=NODE_SIZE, ax=ax
             )
             mx, my = get_curve_midpoint(p1, p2, rad)
-            ax.text(mx, my, str(peso), color=TEXT_COLOR, fontsize=9,
-                    fontweight='bold', ha='center', va='center', bbox=dict(alpha=0))
+            ax.text(mx, my, str(peso), color=TEXT_COLOR, fontsize=10,
+                    fontweight='bold', ha='center', va='center',
+                    bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.75))
 
         # ---- Arista no dirigida (línea simple sin flecha) --------------------
         elif tipo == 'undirected':
@@ -294,7 +293,7 @@ with col1:
                 edge_color=EDGE_COLOR, width=1.5,
                 node_size=NODE_SIZE, ax=ax
             )
-            draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.18)
+            draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.35)
 
         # ---- Skip: el par inverso de undirected ya fue dibujado ---------------
         elif tipo == 'undirected_skip':
@@ -309,13 +308,14 @@ with col1:
                 edge_color=EDGE_COLOR, width=1.5,
                 node_size=NODE_SIZE, ax=ax
             )
-            ax.text(p1[0] + 0.45, p1[1] + 0.55, str(peso),
-                    color=TEXT_COLOR, fontsize=9, fontweight='bold',
-                    ha='center', va='center', bbox=dict(alpha=0))
+            ax.text(p1[0] + 0.6, p1[1] + 0.8, str(peso),
+                    color=TEXT_COLOR, fontsize=10, fontweight='bold',
+                    ha='center', va='center',
+                    bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.75))
 
     ax.axis('off')
-    ax.set_xlim(-0.8, 13.5)
-    ax.set_ylim(-1.2, 10.5)
+    ax.set_xlim(-1, 22)
+    ax.set_ylim(-1, 20)
     st.pyplot(fig)
     st.divider()
 
