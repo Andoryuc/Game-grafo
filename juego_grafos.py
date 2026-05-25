@@ -38,14 +38,16 @@ if 'start_time' not in st.session_state:
 if 'trampa_activada' not in st.session_state:
     st.session_state.trampa_activada = False
 
-NODOS_TRAMPA = {"V21", "V22", "V23"}
+NODOS_TRAMPA = {"V24", "V25", "V26"}  # Estos son los dead-ends reales, ocultos
 
 if 'grafo_exacto' not in st.session_state:
     G = nx.MultiDiGraph()
 
     nodos_normales = ["Casa", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9",
                       "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "UDES"]
-    nodos_trampa = ["V21", "V22", "V23"]
+    # V21, V22, V23 son "cebos" — parecen nodos normales
+    # V24, V25, V26 son los dead-ends reales, 2 pasos después del cebo
+    nodos_trampa = ["V21", "V22", "V23", "V24", "V25", "V26"]
     G.add_nodes_from(nodos_normales + nodos_trampa)
 
     # === ARISTAS DIRIGIDAS (un solo sentido, con flecha) ===
@@ -90,56 +92,83 @@ if 'grafo_exacto' not in st.session_state:
     for u, v, w in aristas_rectas:
         G.add_edge(u, v, weight=w, edge_type='straight')
 
-    # === ARISTAS PARALELAS (doble sentido con pesos DISTINTOS → dos curvas opuestas, sin flecha) ===
-    # V12 ↔ V7
-    G.add_edge("V12", "V7", weight=28, edge_type='parallel', rad=0.25)
+    # === ARISTAS PARALELAS ===
+    G.add_edge("V12", "V7",  weight=28, edge_type='parallel', rad=0.25)
     G.add_edge("V7",  "V12", weight=35, edge_type='parallel', rad=-0.25)
-
-    # V19 ↔ V20
     G.add_edge("V19", "V20", weight=14, edge_type='parallel', rad=0.25)
     G.add_edge("V20", "V19", weight=10, edge_type='parallel', rad=-0.25)
 
-    # === ARISTAS BIDIRECCIONALES (mismo peso o tratadas como no dirigidas → una sola línea sin flecha) ===
-    # V17 ↔ V18 (atajo)
-    G.add_edge("V17", "V18", weight=6,  edge_type='undirected')
-    G.add_edge("V18", "V17", weight=6,  edge_type='undirected_skip')  # skip: no redibujar
-
-    # V4 ↔ V5 (atajo)
-    G.add_edge("V4",  "V5",  weight=7,  edge_type='undirected')
-    G.add_edge("V5",  "V4",  weight=7,  edge_type='undirected_skip')
+    # === ARISTAS BIDIRECCIONALES ===
+    G.add_edge("V17", "V18", weight=6, edge_type='undirected')
+    G.add_edge("V18", "V17", weight=6, edge_type='undirected_skip')
+    G.add_edge("V4",  "V5",  weight=7, edge_type='undirected')
+    G.add_edge("V5",  "V4",  weight=7, edge_type='undirected_skip')
 
     # === LAZOS ===
     G.add_edge("V9",  "V9",  weight=3, edge_type='loop')
     G.add_edge("V14", "V14", weight=4, edge_type='loop')
 
-    # === TRAMPAS CAMUFLADAS (V21, V22, V23 — nombres inocentes, posición central, sin salida) ===
-    # V21: accesible desde V5 y V9 (zona media, parece un hub legítimo con dos entradas)
-    G.add_edge("V5",  "V21", weight=6,  edge_type='straight')   # Costo bajo desde V5
-    G.add_edge("V9",  "V21", weight=4,  edge_type='straight')   # Muy tentador desde V9 — sin salida
+    # =========================================================================
+    # === SISTEMA DE TRAMPAS — 2 pasos para caer, bien camufladas ===
+    # =========================================================================
+    #
+    # TRAMPA 1: Cebo = V21 (zona media-alta), Dead-end = V24
+    #   - V21 recibe de V8, V13, V4 → parece hub legítimo con 3 entradas
+    #   - Desde V21 puedes ir a V22 (cebo 2) o a V24 (dead-end)
+    #   - V24 recibe también de V8 para que no parezca aislado
+    #
+    G.add_edge("V4",  "V21", weight=10, edge_type='straight')  # entrada extra camuflaje
+    G.add_edge("V8",  "V21", weight=6,  edge_type='straight')  # entrada tentadora
+    G.add_edge("V13", "V21", weight=7,  edge_type='straight')  # entrada extra camuflaje
+    G.add_edge("V21", "V22", weight=9,  edge_type='straight')  # salida aparente → cebo 2
+    G.add_edge("V21", "V24", weight=5,  edge_type='straight')  # salida barata → TRAMPA
+    G.add_edge("V9",  "V24", weight=8,  edge_type='straight')  # entrada a V24 desde nodo normal (camuflaje)
+    # V24 → sin salida (dead-end real)
 
-    # V22: accesible desde V10 y V14 (zona media-alta, parece puente hacia V18)
-    G.add_edge("V10", "V22", weight=7,  edge_type='straight')   # Parece atajo a zona alta
-    G.add_edge("V14", "V22", weight=5,  edge_type='straight')   # Costo irresistible — sin salida
+    #
+    # TRAMPA 2: Cebo = V22 (zona media-alta), Dead-end = V25
+    #   - V22 recibe de V21 (trampa 1) y de V10, V14 → parece puente natural
+    #   - Desde V22 solo puedes ir a V25 (dead-end)
+    #   - V25 recibe también de V15 para camuflarse
+    #
+    G.add_edge("V10", "V22", weight=8,  edge_type='straight')  # entrada camuflaje
+    G.add_edge("V14", "V22", weight=6,  edge_type='straight')  # entrada tentadora
+    G.add_edge("V22", "V25", weight=7,  edge_type='straight')  # única salida → TRAMPA
+    G.add_edge("V15", "V25", weight=9,  edge_type='straight')  # entrada a V25 desde nodo normal (camuflaje)
+    # V25 → sin salida (dead-end real)
 
-    # V23: accesible desde V15 y V16 (zona alta, a un paso de la UDES)
-    G.add_edge("V15", "V23", weight=8,  edge_type='straight')   # Parece ruta rápida final
-    G.add_edge("V16", "V23", weight=6,  edge_type='straight')   # Costo tentador — sin salida
+    #
+    # TRAMPA 3: Cebo = V23 (zona casi final), Dead-end = V26
+    #   - V23 recibe de V17, V18, V19 → parece nodo de paso hacia UDES
+    #   - Desde V23 solo puedes ir a V26 (dead-end)
+    #   - V26 recibe también de V20 para no verse aislado
+    #
+    G.add_edge("V17", "V23", weight=8,  edge_type='straight')  # entrada tentadora (barato vs UDES)
+    G.add_edge("V18", "V23", weight=6,  edge_type='straight')  # entrada muy tentadora
+    G.add_edge("V19", "V23", weight=10, edge_type='straight')  # entrada camuflaje
+    G.add_edge("V23", "V26", weight=4,  edge_type='straight')  # única salida → TRAMPA
+    G.add_edge("V20", "V26", weight=7,  edge_type='straight')  # entrada a V26 desde nodo normal (camuflaje)
+    # V26 → sin salida (dead-end real)
 
     st.session_state.grafo_exacto = G
 
 # --- LAYOUT ---
 pos = {
     "Casa": (0, 6),
-    "V1":  (2, 8),  "V2":  (2, 6),  "V3":  (2, 4),
-    "V4":  (4, 9),  "V5":  (4, 7),  "V6":  (4, 5),  "V7":  (4, 3),
-    "V8":  (6, 9),  "V9":  (6, 7),  "V10": (6, 5),  "V11": (6, 3),  "V12": (6, 1),
-    "V13": (8, 8),  "V14": (8, 6),  "V15": (8, 4),  "V16": (8, 2),
-    "V17": (10, 7), "V18": (10, 5), "V19": (10, 3), "V20": (10, 1),
-    "UDES": (12, 4),
-    # Trampas en medio del grafo, posiciones naturales entre nodos reales
-    "V21": (6,  8.2),   # Entre V8 y V13, zona alta-media — parece nodo de paso
-    "V22": (9,  5.5),   # Entre V14/V15 y V17/V18 — parece puente natural
-    "V23": (10, 2.5),   # Entre V19 y V20 — parece nodo hacia UDES
+    "V1":  (2, 8),   "V2":  (2, 6),   "V3":  (2, 4),
+    "V4":  (4, 9),   "V5":  (4, 7),   "V6":  (4, 5),   "V7":  (4, 3),
+    "V8":  (6, 9),   "V9":  (6, 7),   "V10": (6, 5),   "V11": (6, 3),  "V12": (6, 1),
+    "V13": (8, 8.5), "V14": (8, 6),   "V15": (8, 4),   "V16": (8, 2),
+    "V17": (10, 7.5),"V18": (10, 5.5),"V19": (10, 3.5),"V20": (10, 1.5),
+    "UDES": (12, 4.5),
+    # Cebos: posiciones naturales dentro del flujo del grafo
+    "V21": (7, 8),    # Entre V8/V13 y zona alta — parece nodo de paso
+    "V22": (9, 5),    # Entre V14 y V17/V18 — parece puente
+    "V23": (11, 6),   # Junto a UDES — parece entrada alternativa
+    # Dead-ends: posicionados como si fueran destinos normales
+    "V24": (7, 6.2),  # Cerca de V9/V14 — no se ve aislado
+    "V25": (9, 3),    # Cerca de V15/V19 — parece nodo inferior legítimo
+    "V26": (12, 6),   # Cerca de UDES — parece otra entrada a UDES
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
