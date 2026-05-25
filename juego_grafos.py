@@ -33,9 +33,8 @@ if 'current_weight' not in st.session_state:
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
-if 'grafo_trafico_25' not in st.session_state:
+if 'grafo_trafico_caos' not in st.session_state:
     G = nx.MultiDiGraph() 
-    # Exactamente 25 nodos: Casa (1) + C1-C23 (23) + UDES (1)
     nodos = ["Casa"] + [f"C{i}" for i in range(1, 24)] + ["UDES"]
     G.add_nodes_from(nodos) 
     
@@ -55,7 +54,7 @@ if 'grafo_trafico_25' not in st.session_state:
         G.add_edge(u, u, weight=w, edge_type='loop')
 
     # --- ESTRUCTURA DE LA RED ---
-    # 1. Doble Sentido (Líneas grises, sin flechas)
+    # Doble Sentido 
     add_twoway("Casa", "C2", 15)
     add_twoway("C2", "C5", 10)
     add_twoway("C3", "C6", 12)
@@ -65,9 +64,9 @@ if 'grafo_trafico_25' not in st.session_state:
     add_twoway("C12", "C16", 15)
     add_twoway("C16", "C20", 12)
     add_twoway("C17", "C21", 20)
-    add_twoway("C22", "UDES", 55) # Camino directo pero muy costoso
+    add_twoway("C22", "UDES", 55) 
 
-    # 2. Un Solo Sentido (Líneas azules con flecha)
+    # Un Solo Sentido 
     add_oneway("Casa", "C1", 12)
     add_oneway("Casa", "C3", 25)
     add_oneway("C1", "C4", 15)
@@ -87,19 +86,21 @@ if 'grafo_trafico_25' not in st.session_state:
     add_oneway("C18", "C19", 8)
     add_oneway("C15", "C19", 14)
 
-    # 3. Paralelos (Rutas alternativas entre los mismos puntos)
-    add_parallel("C8", "C12", 40, 15) # Ojo clínico aquí
+    # Callejones / Distractores cruzados
+    add_oneway("C16", "C19", 10)
+    add_oneway("C20", "C23", 50) 
+    add_oneway("C2", "C7", 18)
+    add_oneway("C4", "C2", 25)
+
+    # Paralelos 
+    add_parallel("C8", "C12", 40, 15) 
     add_parallel("C13", "C17", 35, 12)
 
-    # 4. Lazos (Trampas mortales)
-    add_loop("C11", 25) # Lazo en nodo de paso
-    add_loop("C19", 5)  # Lazo justo antes del final
-    
-    # Callejón sin salida
-    add_oneway("C16", "C19", 10)
-    add_oneway("C20", "C23", 50) # Engaño de peso alto
+    # Lazos (Mismo color que las demás aristas, más camuflados)
+    add_loop("C11", 25) 
+    add_loop("C19", 5)  
 
-    st.session_state.grafo_trafico_25 = G
+    st.session_state.grafo_trafico_caos = G
 
 st.title("🗺️ Optimización de Rutas: Misión UDES")
 st.markdown("""
@@ -113,36 +114,36 @@ Encuentra el camino con **menor peso (costo/tiempo)** desde tu **Casa** hasta la
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.grafo_trafico_25
+    G = st.session_state.grafo_trafico_caos
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO (NUEVO LAYOUT DIAMANTE) ---
+    # --- RENDERIZADO DEL GRAFO (NUEVO LAYOUT CAÓTICO) ---
     fig, ax = plt.subplots(figsize=(16, 10)) 
     
-    # Coordenadas calculadas matemáticamente para una matriz perfecta de 25 nodos
+    # Coordenadas alteradas intencionalmente para que las líneas se crucen y parezca más complejo
     pos = {
-        "Casa": (0, 3),
-        "C1": (2, 5), "C2": (2, 3), "C3": (2, 1),
-        "C4": (4, 6), "C5": (4, 4), "C6": (4, 2), "C7": (4, 0),
-        "C8": (6, 5), "C9": (6, 3), "C10": (6, 1),
-        "C11": (8, 6), "C12": (8, 4), "C13": (8, 2), "C14": (8, 0),
-        "C15": (10, 5), "C16": (10, 3), "C17": (10, 1),
-        "C18": (12, 6), "C19": (12, 4), "C20": (12, 2), "C21": (12, 0),
-        "C22": (14, 5), "C23": (14, 1),
-        "UDES": (16, 3)
+        "Casa": (0, 5),
+        "C1": (2, 8), "C2": (3, 2), "C3": (4, 6),
+        "C4": (5, 3), "C5": (6, 8), "C6": (7, 1),
+        "C7": (8, 6), "C8": (9, 3), "C9": (10, 8),
+        "C10": (10, 1), "C11": (12, 6), "C12": (13, 2),
+        "C13": (14, 9), "C14": (14, 5), "C15": (15, 1),
+        "C16": (16, 7), "C17": (17, 3), "C18": (18, 9),
+        "C19": (18, 5), "C20": (19, 2), "C21": (20, 8),
+        "C22": (21, 4), "C23": (22, 6),
+        "UDES": (24, 5)
     }
 
     node_colors = ['#bdc3c7' if node not in path else '#f1c40f' for node in G.nodes()]
     node_colors[0] = '#3498db' if 'Casa' not in path[-1:] else '#f1c40f'
     node_colors[-1] = '#2ecc71' 
     
-    # Tamaño de nodo fijo y constante
     NODE_SIZE = 1000
+    EDGE_COLOR = '#34495e' # Color uniforme para TODAS las aristas
             
     nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=NODE_SIZE, ax=ax, edgecolors='black', linewidths=1.5)
     nx.draw_networkx_labels(G, pos, font_color='black', font_size=9, font_weight='bold', ax=ax)
     
-    # --- DIBUJADO DE ARISTAS CON MÁRGENES CORREGIDOS ---
     drawn_twoway = set()
     edge_labels = {}
 
@@ -152,35 +153,31 @@ with col1:
 
         if tipo == 'twoway':
             if (v, u) not in drawn_twoway:
-                nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=False, edge_color='#7f8c8d', width=2.5, node_size=NODE_SIZE, ax=ax)
+                nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=False, edge_color=EDGE_COLOR, width=2.5, node_size=NODE_SIZE, ax=ax)
                 drawn_twoway.add((u, v))
                 edge_labels[(u, v)] = peso
                 
         elif tipo == 'oneway':
-            # min_target_margin asegura que la flecha quede FUERA del círculo
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, edge_color='#2980b9', width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=20, edge_color=EDGE_COLOR, width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
             edge_labels[(u, v)] = peso
             
         elif tipo == 'parallel':
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=15, connectionstyle=f"arc3,rad={d['rad']}", edge_color='#8e44ad', width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, connectionstyle=f"arc3,rad={d['rad']}", edge_color=EDGE_COLOR, width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
             x = (pos[u][0] + pos[v][0]) / 2
             y = (pos[u][1] + pos[v][1]) / 2
-            offset = 0.25 if d['rad'] > 0 else -0.25
-            ax.text(x, y + offset, str(peso), color='#8e44ad', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1))
+            offset = 0.35 if d['rad'] > 0 else -0.35
+            ax.text(x, y + offset, str(peso), color='#c0392b', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1))
             
         elif tipo == 'loop':
-            # Delegamos el loop a NetworkX pero lo estilizamos para que resalte
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=15, edge_color='#e74c3c', width=2.5, node_size=NODE_SIZE, ax=ax)
-            # Dibujamos el texto del peso explícitamente arriba del nodo con un cuadro rojo
-            ax.text(pos[u][0] + 0.3, pos[u][1] + 0.5, str(peso), color='white', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='#e74c3c', edgecolor='none', boxstyle='circle,pad=0.3'))
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, connectionstyle='arc3, rad=0.6', edge_color=EDGE_COLOR, width=2.5, node_size=NODE_SIZE, ax=ax)
+            ax.text(pos[u][0] + 0.3, pos[u][1] + 0.5, str(peso), color='#c0392b', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', boxstyle='circle,pad=0.2'))
 
-    # Etiquetas de aristas normales (oneway y twoway)
+    # Etiquetas de aristas estandar
     nx.draw_networkx_edge_labels(
-        G, pos, edge_labels=edge_labels, font_color='#2c3e50', font_size=10, font_weight='bold', label_pos=0.35,
+        G, pos, edge_labels=edge_labels, font_color='#c0392b', font_size=10, font_weight='bold', label_pos=0.35,
         bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1)
     )
 
-    # Eliminar bordes de la gráfica para un look más limpio
     ax.axis('off')
     st.pyplot(fig)
     st.divider()
