@@ -17,8 +17,8 @@ def cargar_leaderboard():
 
 def guardar_leaderboard(nombre, peso, tiempo):
     datos = cargar_leaderboard()
-    datos.append({"Estudiante": nombre, "Costo (Tráfico)": peso, "Tiempo de Resolución (s)": round(tiempo, 2)})
-    datos = sorted(datos, key=lambda x: (x["Costo (Tráfico)"], x["Tiempo de Resolución (s)"]))
+    datos.append({"Estudiante": nombre, "Costo (Tráfico)": peso, "Tiempo (s)": round(tiempo, 2)})
+    datos = sorted(datos, key=lambda x: (x["Costo (Tráfico)"], x["Tiempo (s)"]))
     with open(ARCHIVO_LEADERBOARD, "w") as f:
         json.dump(datos, f)
 
@@ -33,150 +33,99 @@ if 'current_weight' not in st.session_state:
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
-if 'grafo_trafico_caos' not in st.session_state:
+if 'grafo_exacto' not in st.session_state:
     G = nx.MultiDiGraph() 
-    nodos = ["Casa"] + [f"C{i}" for i in range(1, 24)] + ["UDES"]
+    nodos = ["Casa", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "UDES"]
     G.add_nodes_from(nodos) 
     
-    # --- FUNCIONES DE TOPOLOGÍA ---
-    def add_twoway(u, v, w):
-        G.add_edge(u, v, weight=w, edge_type='twoway')
-        G.add_edge(v, u, weight=w, edge_type='twoway')
+    # 1. Rutas rectas estándar (Un solo sentido)
+    aristas_rectas = [
+        ("Casa", "C1", 12), ("Casa", "C4", 45), ("Casa", "C2", 15),
+        ("C1", "C3", 10), ("C1", "C4", 25),
+        ("C2", "C4", 30), ("C2", "C7", 15), ("C2", "C5", 10),
+        ("C3", "C6", 15), ("C3", "C8", 5),
+        ("C4", "C6", 20), ("C4", "C9", 55), ("C4", "C7", 18),
+        ("C5", "C7", 12), ("C5", "C10", 20),
+        ("C6", "C8", 5), ("C6", "C11", 30), ("C6", "C9", 25),
+        ("C7", "C9", 22), ("C7", "C10", 10),
+        ("C9", "C11", 10), ("C9", "UDES", 40), ("C9", "C12", 15),
+        ("C11", "UDES", 15),
+        ("C12", "UDES", 25)
+    ]
+    for u, v, w in aristas_rectas:
+        G.add_edge(u, v, weight=w, edge_type='straight')
 
-    def add_oneway(u, v, w):
-        G.add_edge(u, v, weight=w, edge_type='oneway')
+    # 2. Rutas paralelas/bidireccionales (C10 y C12)
+    G.add_edge("C10", "C12", weight=15, edge_type='curved', rad=0.15)
+    G.add_edge("C12", "C10", weight=10, edge_type='curved', rad=0.15)
 
-    def add_parallel(u, v, w1, w2):
-        G.add_edge(u, v, weight=w1, edge_type='parallel', rad=0.2)
-        G.add_edge(u, v, weight=w2, edge_type='parallel', rad=-0.2)
-        
-    def add_loop(u, w):
-        G.add_edge(u, u, weight=w, edge_type='loop')
+    # 3. Lazo en C8
+    G.add_edge("C8", "C8", weight=2, edge_type='loop')
 
-    # --- ESTRUCTURA DE LA RED ---
-    # Doble Sentido 
-    add_twoway("Casa", "C2", 15)
-    add_twoway("C2", "C5", 10)
-    add_twoway("C3", "C6", 12)
-    add_twoway("C5", "C9", 20)
-    add_twoway("C6", "C10", 18)
-    add_twoway("C9", "C13", 10)
-    add_twoway("C12", "C16", 15)
-    add_twoway("C16", "C20", 12)
-    add_twoway("C17", "C21", 20)
-    add_twoway("C22", "UDES", 55) 
-
-    # Un Solo Sentido 
-    add_oneway("Casa", "C1", 12)
-    add_oneway("Casa", "C3", 25)
-    add_oneway("C1", "C4", 15)
-    add_oneway("C1", "C5", 22)
-    add_oneway("C4", "C8", 10)
-    add_oneway("C7", "C10", 30)
-    add_oneway("C8", "C11", 14)
-    add_oneway("C10", "C14", 18)
-    add_oneway("C11", "C15", 25)
-    add_oneway("C14", "C17", 15)
-    add_oneway("C15", "C18", 22)
-    add_oneway("C17", "C20", 10)
-    add_oneway("C18", "C22", 18)
-    add_oneway("C21", "C23", 12)
-    add_oneway("C19", "C23", 15)
-    add_oneway("C23", "UDES", 10)
-    add_oneway("C18", "C19", 8)
-    add_oneway("C15", "C19", 14)
-
-    # Callejones / Distractores cruzados
-    add_oneway("C16", "C19", 10)
-    add_oneway("C20", "C23", 50) 
-    add_oneway("C2", "C7", 18)
-    add_oneway("C4", "C2", 25)
-
-    # Paralelos 
-    add_parallel("C8", "C12", 40, 15) 
-    add_parallel("C13", "C17", 35, 12)
-
-    # Lazos (Mismo color que las demás aristas, más camuflados)
-    add_loop("C11", 25) 
-    add_loop("C19", 5)  
-
-    st.session_state.grafo_trafico_caos = G
+    st.session_state.grafo_exacto = G
 
 st.title("🗺️ Optimización de Rutas: Misión UDES")
 st.markdown("""
 Encuentra el camino con **menor peso (costo/tiempo)** desde tu **Casa** hasta la **UDES**. 
-* **Líneas sólidas sin flecha:** Calles de doble sentido.
-* **Líneas con flecha:** Calles de un solo sentido.
-* **Líneas curvas dobles:** Vías paralelas (tienen diferente costo, elige bien).
-* Evalúa bien tus opciones. El tiempo sigue corriendo aunque te equivoques. 
+* Analiza topológicamente el grafo antes de moverte. 
+* Cuidado con los lazos y las vías de doble sentido con pesos distintos.
 """)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.grafo_trafico_caos
+    G = st.session_state.grafo_exacto
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO (NUEVO LAYOUT CAÓTICO) ---
-    fig, ax = plt.subplots(figsize=(16, 10)) 
+    fig, ax = plt.subplots(figsize=(14, 8)) 
     
-    # Coordenadas alteradas intencionalmente para que las líneas se crucen y parezca más complejo
+    # Coordenadas exactas para replicar el layout de tu imagen
     pos = {
-        "Casa": (0, 5),
-        "C1": (2, 8), "C2": (3, 2), "C3": (4, 6),
-        "C4": (5, 3), "C5": (6, 8), "C6": (7, 1),
-        "C7": (8, 6), "C8": (9, 3), "C9": (10, 8),
-        "C10": (10, 1), "C11": (12, 6), "C12": (13, 2),
-        "C13": (14, 9), "C14": (14, 5), "C15": (15, 1),
-        "C16": (16, 7), "C17": (17, 3), "C18": (18, 9),
-        "C19": (18, 5), "C20": (19, 2), "C21": (20, 8),
-        "C22": (21, 4), "C23": (22, 6),
-        "UDES": (24, 5)
+        "Casa": (0, 3),
+        "C1": (2, 5), "C2": (2, 1),
+        "C3": (4, 7), "C4": (4, 3), "C5": (4, -1),
+        "C6": (6, 5), "C7": (6, 1),
+        "C8": (8, 7), "C9": (8, 3), "C10": (8, -1),
+        "C11": (10, 5), "C12": (10, 1),
+        "UDES": (12, 3)
     }
 
-    node_colors = ['#bdc3c7' if node not in path else '#f1c40f' for node in G.nodes()]
-    node_colors[0] = '#3498db' if 'Casa' not in path[-1:] else '#f1c40f'
-    node_colors[-1] = '#2ecc71' 
-    
-    NODE_SIZE = 1000
-    EDGE_COLOR = '#34495e' # Color uniforme para TODAS las aristas
+    # Colores: Azul para Casa, Gris Oscuro para el resto, Amarillo para la ruta actual
+    node_colors = []
+    for node in G.nodes():
+        if node == "Casa":
+            node_colors.append('#3b82f6')
+        elif node == path[-1] and node != "Casa":
+            node_colors.append('#f1c40f')
+        else:
+            node_colors.append('#1f2937')
             
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=NODE_SIZE, ax=ax, edgecolors='black', linewidths=1.5)
-    nx.draw_networkx_labels(G, pos, font_color='black', font_size=9, font_weight='bold', ax=ax)
+    NODE_SIZE = 1200
+    EDGE_COLOR = '#94a3b8' # Gris claro de la imagen
+    TEXT_COLOR = '#dc2626' # Rojo para los pesos
+            
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=NODE_SIZE, ax=ax, edgecolors='white', linewidths=1.5)
+    nx.draw_networkx_labels(G, pos, font_color='white', font_size=10, font_weight='bold', ax=ax)
     
-    drawn_twoway = set()
-    edge_labels = {}
-
+    # Dibujar aristas según su tipo para replicar la imagen
     for u, v, key, d in G.edges(data=True, keys=True):
         peso = d['weight']
         tipo = d['edge_type']
 
-        if tipo == 'twoway':
-            if (v, u) not in drawn_twoway:
-                nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=False, edge_color=EDGE_COLOR, width=2.5, node_size=NODE_SIZE, ax=ax)
-                drawn_twoway.add((u, v))
-                edge_labels[(u, v)] = peso
-                
-        elif tipo == 'oneway':
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=20, edge_color=EDGE_COLOR, width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
-            edge_labels[(u, v)] = peso
+        if tipo == 'straight':
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, edge_color=EDGE_COLOR, width=1.5, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
+            x, y = (pos[u][0] + pos[v][0]) / 2, (pos[u][1] + pos[v][1]) / 2
+            ax.text(x, y, str(peso), color=TEXT_COLOR, fontsize=11, fontweight='bold', ha='center', va='center', bbox=dict(alpha=0)) # bbox transparente como en tu imagen
             
-        elif tipo == 'parallel':
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, connectionstyle=f"arc3,rad={d['rad']}", edge_color=EDGE_COLOR, width=2, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
-            x = (pos[u][0] + pos[v][0]) / 2
-            y = (pos[u][1] + pos[v][1]) / 2
-            offset = 0.35 if d['rad'] > 0 else -0.35
-            ax.text(x, y + offset, str(peso), color='#c0392b', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1))
+        elif tipo == 'curved':
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, connectionstyle=f"arc3,rad={d['rad']}", edge_color=EDGE_COLOR, width=1.5, node_size=NODE_SIZE, min_target_margin=18, ax=ax)
+            x, y = (pos[u][0] + pos[v][0]) / 2, (pos[u][1] + pos[v][1]) / 2
+            offset = 0.3 if d['rad'] > 0 else -0.3
+            ax.text(x, y + offset, str(peso), color=TEXT_COLOR, fontsize=11, fontweight='bold', ha='center', va='center', bbox=dict(alpha=0))
             
         elif tipo == 'loop':
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=18, connectionstyle='arc3, rad=0.6', edge_color=EDGE_COLOR, width=2.5, node_size=NODE_SIZE, ax=ax)
-            ax.text(pos[u][0] + 0.3, pos[u][1] + 0.5, str(peso), color='#c0392b', fontsize=10, fontweight='bold', ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', boxstyle='circle,pad=0.2'))
-
-    # Etiquetas de aristas estandar
-    nx.draw_networkx_edge_labels(
-        G, pos, edge_labels=edge_labels, font_color='#c0392b', font_size=10, font_weight='bold', label_pos=0.35,
-        bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1)
-    )
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], arrows=True, arrowstyle='-|>', arrowsize=15, connectionstyle='arc3, rad=0.5', edge_color=EDGE_COLOR, width=1.5, node_size=NODE_SIZE, ax=ax)
+            ax.text(pos[u][0] + 0.3, pos[u][1] + 0.5, str(peso), color=TEXT_COLOR, fontsize=11, fontweight='bold', ha='center', va='center', bbox=dict(alpha=0))
 
     ax.axis('off')
     st.pyplot(fig)
@@ -189,7 +138,7 @@ with col1:
     if st.session_state.start_time is not None:
         tiempo_transcurrido = time.time() - st.session_state.start_time
 
-    st.subheader(f"📍 Posición: {current_node} | 🚦 Tráfico Acumulado: {st.session_state.current_weight}")
+    st.subheader(f"📍 Posición: {current_node} | 🚦 Costo de Ruta: {st.session_state.current_weight}")
     st.caption(f"⏱️ Tiempo activo: {round(tiempo_transcurrido, 1)} s")
     
     if current_node == "UDES":
@@ -200,9 +149,7 @@ with col1:
             nombre_jugador = st.text_input("Ingresa tu código o nombre:")
             if st.form_submit_button("Subir al Ranking") and nombre_jugador:
                 guardar_leaderboard(nombre_jugador, st.session_state.current_weight, tiempo_transcurrido)
-                st.session_state.path = ["Casa"]
-                st.session_state.current_weight = 0
-                st.session_state.start_time = None
+                st.session_state.path, st.session_state.current_weight, st.session_state.start_time = ["Casa"], 0, None
                 st.rerun()
     else:
         out_edges = list(G.out_edges(current_node, data=True))
@@ -210,9 +157,8 @@ with col1:
         
         if is_dead_end:
             st.error("⚠️ Error Crítico: Has entrado a un callejón sin salida.")
-            st.warning("Reinicia la ruta para intentarlo de nuevo.")
+            st.warning("From error one learns, each error brings me closer to my dreams. Reinicia la ruta para intentarlo de nuevo.")
         else:
-            st.write("Intersecciones disponibles:")
             cols = st.columns(min(len(out_edges), 4))
             for i, (u, v, data) in enumerate(out_edges):
                 col = cols[i % len(cols)]
@@ -225,17 +171,14 @@ with col1:
                     st.rerun()
                     
         st.write("")
-        st.caption("Si te equivocas, puedes reiniciar. El peso volverá a 0, pero tu tiempo seguirá corriendo.")
         if st.button("🔄 Reiniciar desde Casa", type="primary", use_container_width=True):
-            st.session_state.path = ["Casa"]
-            st.session_state.current_weight = 0 
+            st.session_state.path, st.session_state.current_weight = ["Casa"], 0 
             if st.session_state.start_time is None:
                 st.session_state.start_time = time.time()
             st.rerun()
 
 with col2:
     st.subheader("🏆 Leaderboard Dijkstra")
-    st.write("*(Desempate por tiempo)*")
     datos_leaderboard = cargar_leaderboard()
     
     if datos_leaderboard:
@@ -243,4 +186,4 @@ with col2:
         df.index = df.index + 1
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("Sin registros. Sé el primero en encontrar la ruta óptima.")
+        st.info("Sé el primero en encontrar la ruta óptima.")
