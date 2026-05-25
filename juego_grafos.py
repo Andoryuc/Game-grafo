@@ -7,7 +7,7 @@ import time
 import pandas as pd
 
 # --- FUNCIONES DE BASE DE DATOS (LEADERBOARD) ---
-ARCHIVO_LEADERBOARD = "ranking_udes.json"
+ARCHIVO_LEADERBOARD = "ranking_dijkstra_udes.json"
 
 def cargar_leaderboard():
     if os.path.exists(ARCHIVO_LEADERBOARD):
@@ -17,14 +17,14 @@ def cargar_leaderboard():
 
 def guardar_leaderboard(nombre, peso, tiempo):
     datos = cargar_leaderboard()
-    datos.append({"Estudiante": nombre, "Peso Total": peso, "Tiempo (seg)": round(tiempo, 2)})
-    # Desempate: 1ro menor peso, 2do menor tiempo
-    datos = sorted(datos, key=lambda x: (x["Peso Total"], x["Tiempo (seg)"]))
+    datos.append({"Estudiante": nombre, "Costo (Tiempo en Tráfico)": peso, "Tiempo de Resolución (s)": round(tiempo, 2)})
+    # Desempate: 1ro menor costo de ruta, 2do menor tiempo pensando
+    datos = sorted(datos, key=lambda x: (x["Costo (Tiempo en Tráfico)"], x["Tiempo de Resolución (s)"]))
     with open(ARCHIVO_LEADERBOARD, "w") as f:
         json.dump(datos, f)
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Ruta Óptima a la UDES", layout="wide")
+st.set_page_config(page_title="Simulador de Tráfico - UDES", layout="wide")
 
 # --- ESTADO DE LA SESIÓN ---
 if 'path' not in st.session_state:
@@ -34,170 +34,174 @@ if 'current_weight' not in st.session_state:
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
 
-if 'grafo_udes' not in st.session_state:
-    G = nx.MultiDiGraph() 
-    nodos = ["Casa", "A", "B", "C", "D", "E", "Trampa 1", "Trampa 2", "UDES"]
+if 'grafo_trafico' not in st.session_state:
+    # Usamos DiGraph estándar (ideal para representar calles de 1 o 2 vías sin aristas múltiples en la misma dirección)
+    G = nx.DiGraph() 
+    nodos = ["Casa", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "UDES"]
     G.add_nodes_from(nodos) 
     
-    def add_edge_data(u, v, weight, tipo, desc=""):
-        # Se añade un pequeño identificador visual al label para la UI
-        G.add_edge(u, v, weight=weight, label=f"{tipo}", desc=desc)
-
-    # 1. Camino Directo (Unidireccional pero peso altísimo)
-    add_edge_data("Casa", "UDES", 120, "Unidireccional", "Ruta directa (Tráfico pesado)")
-
-    # 2. Caminos Bidireccionales (Ida y vuelta)
-    add_edge_data("Casa", "A", 10, "Doble vía", "Calle principal")
-    add_edge_data("A", "Casa", 10, "Doble vía", "Calle principal")
+    # --- DEFINICIÓN DE RUTAS Y TRÁFICO (PESOS) ---
+    # Rutas iniciales
+    G.add_edge("Casa", "C1", weight=12)
+    G.add_edge("Casa", "C2", weight=15)
+    G.add_edge("Casa", "C4", weight=45) # Camino que parece directo pero tiene mucho tráfico
     
-    add_edge_data("A", "B", 5, "Doble vía", "Conexión barrial")
-    add_edge_data("B", "A", 5, "Doble vía", "Conexión barrial")
-
-    add_edge_data("C", "D", 10, "Doble vía", "Avenida central")
-    add_edge_data("D", "C", 10, "Doble vía", "Avenida central")
-
-    # 3. Caminos Unidireccionales
-    add_edge_data("Casa", "B", 25, "Unidireccional", "Bajada de un solo sentido")
-    add_edge_data("B", "E", 15, "Unidireccional", "Vía rápida")
-    add_edge_data("E", "UDES", 30, "Unidireccional", "Subida a la universidad")
-    add_edge_data("D", "UDES", 15, "Unidireccional", "Entrada principal")
-
-    # 4. Enlaces Paralelos (Dos formas de ir de A a C)
-    add_edge_data("A", "C", 25, "Paralelo", "Ruta Segura y pavimentada")
-    add_edge_data("A", "C", 5, "Paralelo", "Atajo de tierra (Peligroso)")
-
-    # 5. Lazos (Loops)
-    add_edge_data("A", "A", 3, "Lazo", "Te perdiste en la rotonda")
-
-    # 6. Trampas y Encierros (Callejones sin salida hacia UDES)
-    add_edge_data("C", "Trampa 1", 2, "Unidireccional", "Se ve muy corto...")
-    add_edge_data("Trampa 1", "Trampa 1", 1, "Lazo", "Dando vueltas en el mismo lugar") 
+    # Red central (Mezcla de un solo sentido y doble sentido con diferentes pesos)
+    G.add_edge("C1", "C3", weight=10)
+    G.add_edge("C1", "C4", weight=25)
     
-    add_edge_data("E", "Trampa 2", 5, "Unidireccional", "Desvío engañoso")
+    G.add_edge("C2", "C5", weight=10)
+    G.add_edge("C2", "C4", weight=30)
+    
+    G.add_edge("C3", "C6", weight=15)
+    G.add_edge("C3", "C8", weight=5) # Entrada a un embotellamiento sin salida
+    
+    G.add_edge("C4", "C6", weight=20)
+    G.add_edge("C4", "C7", weight=18)
+    G.add_edge("C4", "C9", weight=55) # Troncal colapsada
+    
+    G.add_edge("C5", "C7", weight=12)
+    G.add_edge("C5", "C10", weight=20)
+    
+    G.add_edge("C6", "C8", weight=5) # Otra entrada al embotellamiento
+    G.add_edge("C6", "C9", weight=25)
+    G.add_edge("C6", "C11", weight=30)
+    
+    G.add_edge("C7", "C2", weight=15) # Retorno de 1 vía
+    G.add_edge("C7", "C9", weight=22)
+    G.add_edge("C7", "C10", weight=10)
+    
+    # El nodo C8 es un callejón sin salida / rotonda infinita
+    G.add_edge("C8", "C8", weight=2)
+    
+    G.add_edge("C9", "UDES", weight=40)
+    G.add_edge("C9", "C11", weight=10)
+    G.add_edge("C9", "C12", weight=15)
+    
+    G.add_edge("C10", "C12", weight=15)
+    G.add_edge("C12", "C10", weight=10) # Doble vía con distinto tráfico de bajada
+    
+    G.add_edge("C11", "UDES", weight=15)
+    G.add_edge("C12", "UDES", weight=25)
 
-    st.session_state.grafo_udes = G
+    st.session_state.grafo_trafico = G
 
-st.title("🗺️ Optimización de Rutas: Misión UDES")
+st.title("🚦 Optimización de Redes: Simulador de Tráfico")
 st.markdown("""
-Encuentra el camino con **menor peso (costo/distancia)** desde tu **Casa** hasta la **UDES**. 
-* Evalúa bien tus opciones: hay enlaces paralelos, rotondas (lazos) y callejones sin salida.
-* El tiempo sigue corriendo aunque te equivoques. 
+**Objetivo:** Trazar la ruta computacional con el **menor costo (tiempo en tráfico)** desde la **Casa** hasta la **UDES**.
+* Las aristas representan calles. Las flechas indican el sentido vial permitido.
+* Los números sobre las aristas representan el nivel de tráfico (peso).
+* Analiza topológicamente el grafo antes de moverte. **No hay ayudas visuales.**
 """)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    G = st.session_state.grafo_udes
+    G = st.session_state.grafo_trafico
     path = st.session_state.path
 
-    # --- RENDERIZADO DEL GRAFO (POSICIONES FIJAS) ---
-    fig, ax = plt.subplots(figsize=(12, 6)) 
+    # --- RENDERIZADO DEL GRAFO (MAPA URBANO) ---
+    fig, ax = plt.subplots(figsize=(14, 8)) 
     
-    # Coordenadas manuales para que el grafo parezca un mapa lógico
+    # Coordenadas estructuradas para obligarlos a leer las líneas
     pos = {
-        "Casa": (0, 0),
-        "A": (2, 1),
-        "B": (2, -1),
-        "C": (4, 1),
-        "E": (4, -1),
-        "D": (6, 1),
-        "Trampa 1": (5, 2),
-        "Trampa 2": (5, -2),
-        "UDES": (8, 0)
+        "Casa": (0, 3),
+        "C1": (1, 4), "C2": (1, 2),
+        "C3": (2, 5), "C4": (2, 3), "C5": (2, 1),
+        "C6": (3, 4), "C7": (3, 2),
+        "C8": (4, 5), "C9": (4, 3), "C10": (4, 1),
+        "C11": (5, 4), "C12": (5, 2),
+        "UDES": (6, 3)
     }
 
-    node_colors = []
-    for node in G.nodes():
-        if node == "Casa": node_colors.append('#3498db') # Azul
-        elif node == "UDES": node_colors.append('#2ecc71') # Verde
-        elif path and node == path[-1]: node_colors.append('#f1c40f') # Amarillo (Actual)
-        elif node in path: node_colors.append('#bdc3c7') # Gris (Visitados)
-        elif "Trampa" in node: node_colors.append('#e74c3c') # Rojo
-        else: node_colors.append('#95a5a6') 
+    # Todos los nodos son uniformes para no dar pistas, solo resaltamos el camino actual
+    node_colors = ['#1f2937' if node not in path else '#3b82f6' for node in G.nodes()]
             
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=2000, ax=ax, edgecolors='black')
-    nx.draw_networkx_labels(G, pos, font_color='white', font_size=10, font_weight='bold', ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=1200, ax=ax, edgecolors='white', linewidths=2)
+    nx.draw_networkx_labels(G, pos, font_color='white', font_size=11, font_weight='bold', ax=ax)
     
-    # Dibujar aristas con curvatura para poder ver los paralelos y bidireccionales
-    for u, v, data in G.edges(data=True):
-        style = 'arc3,rad=0.15' if u != v else 'arc3,rad=0' # Curvar a menos que sea un lazo
-        nx.draw_networkx_edges(
-            G, pos, 
-            edgelist=[(u,v)],
-            edge_color='#2c3e50', 
-            arrows=True, 
-            arrowstyle='-|>', 
-            arrowsize=15, 
-            connectionstyle=style, 
-            ax=ax
-        )
+    # Dibujar aristas curvadas para evitar colisiones visuales
+    nx.draw_networkx_edges(
+        G, pos, 
+        edge_color='#9ca3af', 
+        arrows=True, 
+        arrowstyle='-|>', 
+        arrowsize=18, 
+        connectionstyle='arc3,rad=0.1', 
+        ax=ax
+    )
+
+    # Añadir los pesos directamente en las líneas
+    edge_weights = {(u, v): d['weight'] for u, v, d in G.edges(data=True)}
+    nx.draw_networkx_edge_labels(
+        G, pos,
+        edge_labels=edge_weights,
+        font_color='#b91c1c',
+        font_size=10,
+        font_weight='bold',
+        label_pos=0.3, # Coloca el número más cerca del nodo de origen para evitar que se pisen en vías de doble sentido
+        bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=2)
+    )
 
     st.pyplot(fig)
     st.divider()
 
-    # --- LÓGICA DEL JUEGO ---
+    # --- LÓGICA DE NAVEGACIÓN ---
     current_node = path[-1]
     
-    # Cronómetro visual
     tiempo_transcurrido = 0
     if st.session_state.start_time is not None:
         tiempo_transcurrido = time.time() - st.session_state.start_time
 
-    st.subheader(f"📍 Ubicación Actual: {current_node} | ⚖️ Peso Acumulado: {st.session_state.current_weight}")
-    st.caption(f"⏱️ Tiempo activo: {round(tiempo_transcurrido, 1)} segundos")
+    st.subheader(f"📍 Posición: {current_node} | 🚦 Tráfico Acumulado (Peso): {st.session_state.current_weight}")
+    st.caption(f"⏱️ Tiempo de resolución: {round(tiempo_transcurrido, 1)} s")
     
     if current_node == "UDES":
-        st.success(f"¡LLEGASTE A LA UDES! Peso Final: {st.session_state.current_weight} | Tiempo: {round(tiempo_transcurrido, 2)} s.")
-        st.balloons()
+        st.success(f"¡SISTEMA RESUELTO! Costo de ruta: {st.session_state.current_weight} | Tiempo: {round(tiempo_transcurrido, 2)} s.")
         
         with st.form("leaderboard_form"):
-            nombre_jugador = st.text_input("Ingresa tu nombre para el ranking:")
-            if st.form_submit_button("Guardar Récord") and nombre_jugador:
+            nombre_jugador = st.text_input("Ingresa tu código o nombre de estudiante:")
+            if st.form_submit_button("Subir al Ranking") and nombre_jugador:
                 guardar_leaderboard(nombre_jugador, st.session_state.current_weight, tiempo_transcurrido)
-                st.success("¡Base de datos actualizada!")
-                # Reset total tras ganar
                 st.session_state.path = ["Casa"]
                 st.session_state.current_weight = 0
                 st.session_state.start_time = None
                 st.rerun()
     else:
-        out_edges = list(G.out_edges(current_node, data=True, keys=True))
+        out_edges = list(G.out_edges(current_node, data=True))
         
-        if not out_edges or all(u == v for u, v, k, d in out_edges):
-            st.error("⚠️ Caíste en una trampa sin salida o en un bucle infinito.")
-            st.markdown(">*De los errores se aprende, cada error me acerca más a mis sueños.*")
+        # Validar si están en un nodo sin salida o bucle infinito (como el C8)
+        is_dead_end = len(out_edges) == 0 or all(u == v for u, v, d in out_edges)
+        
+        if is_dead_end:
+            st.error("⚠️ Error de enrutamiento: Has entrado a una vía sin salida o embotellamiento total.")
+            st.warning("De los errores se aprende, cada error me acerca más a mis sueños. Debes reiniciar la ruta.")
         else:
-            st.write("Caminos disponibles:")
-            for u, v, key, data in out_edges:
-                peso = data.get('weight', 0)
-                tipo = data.get('label', '')
-                desc = data.get('desc', '')
-                
-                # Etiqueta del botón
-                btn_text = f"Ir a {v} (Peso: {peso})\n[{tipo}] {desc}"
-                
-                if st.button(btn_text, key=f"btn_{u}_{v}_{key}"):
+            st.write("Intersecciones disponibles:")
+            cols = st.columns(min(len(out_edges), 4))
+            for i, (u, v, data) in enumerate(out_edges):
+                col = cols[i % len(cols)]
+                # El botón ya no dice el peso, tienen que mirar el grafo
+                if col.button(f"Mover a {v}", key=f"btn_{u}_{v}"):
                     if st.session_state.start_time is None:
                         st.session_state.start_time = time.time()
                     
                     st.session_state.path.append(v)
-                    st.session_state.current_weight += peso
+                    st.session_state.current_weight += data['weight']
                     st.rerun()
                     
         st.write("")
-        # BOTÓN DE REINICIO TÁCTICO
-        st.caption("Si te equivocaste de ruta, puedes reiniciar la posición. El peso volverá a 0, pero el tiempo seguirá corriendo.")
-        if st.button("🔄 Reiniciar desde Casa", type="primary", use_container_width=True):
+        st.caption("Al reiniciar, el tráfico (peso) vuelve a 0, pero tu tiempo de resolución seguirá corriendo.")
+        if st.button("🔄 Abortar y Reiniciar desde Casa", type="primary", use_container_width=True):
             st.session_state.path = ["Casa"]
             st.session_state.current_weight = 0 
-            # NO reseteamos start_time para penalizar en el desempate
             if st.session_state.start_time is None:
                 st.session_state.start_time = time.time()
             st.rerun()
 
 with col2:
-    st.subheader("🏆 Ranking Dijkstra")
-    st.write("*(Desempate por tiempo)*")
+    st.subheader("🏆 Leaderboard")
+    st.write("*(Clasificación por menor tráfico y tiempo)*")
     datos_leaderboard = cargar_leaderboard()
     
     if datos_leaderboard:
@@ -205,4 +209,4 @@ with col2:
         df.index = df.index + 1
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("Sé el primero en encontrar la ruta óptima.")
+        st.info("Sin registros. Demuestra tus conocimientos de grafos.")
