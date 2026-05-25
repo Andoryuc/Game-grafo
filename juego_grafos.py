@@ -196,8 +196,6 @@ with col1:
     path = st.session_state.path
 
     fig, ax = plt.subplots(figsize=(16, 10))
-    fig.patch.set_facecolor('#0f172a')
-    ax.set_facecolor('#0f172a')
 
     # ── Colores de nodos ──────────────────────────────────────────────────────
     node_colors = []
@@ -236,18 +234,28 @@ with col1:
             )
             draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.18)
 
-        # ---- Arista paralela (curva sin flecha, pesos distintos por dirección) -
+        # ---- Arista paralela (dos curvas arqueadas opuestas, sin flecha) -------
         elif tipo == 'parallel':
             rad = d.get('rad', 0.25)
-            draw_curved_no_arrow(ax, p1, p2, rad, EDGE_COLOR, linewidth=1.5)
+            nx.draw_networkx_edges(
+                G, pos, edgelist=[(u, v)],
+                arrows=False,
+                connectionstyle=f"arc3,rad={rad}",
+                edge_color=EDGE_COLOR, width=1.5,
+                node_size=NODE_SIZE, ax=ax
+            )
             mx, my = get_curve_midpoint(p1, p2, rad)
             ax.text(mx, my, str(peso), color=TEXT_COLOR, fontsize=9,
                     fontweight='bold', ha='center', va='center', bbox=dict(alpha=0))
 
-        # ---- Arista no dirigida (una sola línea sin flecha) -------------------
+        # ---- Arista no dirigida (línea simple sin flecha) --------------------
         elif tipo == 'undirected':
-            ax.plot([p1[0], p2[0]], [p1[1], p2[1]],
-                    color=EDGE_COLOR, linewidth=1.5, zorder=1)
+            nx.draw_networkx_edges(
+                G, pos, edgelist=[(u, v)],
+                arrows=False,
+                edge_color=EDGE_COLOR, width=1.5,
+                node_size=NODE_SIZE, ax=ax
+            )
             draw_edge_label(ax, p1, p2, str(peso), offset_perp=0.18)
 
         # ---- Skip: el par inverso de undirected ya fue dibujado ---------------
