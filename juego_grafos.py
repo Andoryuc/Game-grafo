@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 # --- FUNCIONES DE BASE DE DATOS (LEADERBOARD) ---
-ARCHIVO_LEADERBOARD = "ranking_dijkstra_udes.json"
+ARCHIVO_LEADERBOARD = "ranking_dijkstra_casa_udes.json"
 
 def cargar_leaderboard():
     if os.path.exists(ARCHIVO_LEADERBOARD):
