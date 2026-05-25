@@ -38,14 +38,14 @@ if 'start_time' not in st.session_state:
 if 'trampa_activada' not in st.session_state:
     st.session_state.trampa_activada = False
 
-NODOS_TRAMPA = {"T1", "T2", "T3"}
+NODOS_TRAMPA = {"V21", "V22", "V23"}
 
 if 'grafo_exacto' not in st.session_state:
     G = nx.MultiDiGraph()
 
     nodos_normales = ["Casa", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9",
                       "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "UDES"]
-    nodos_trampa = ["T1", "T2", "T3"]
+    nodos_trampa = ["V21", "V22", "V23"]
     G.add_nodes_from(nodos_normales + nodos_trampa)
 
     # === ARISTAS DIRIGIDAS (un solo sentido, con flecha) ===
@@ -112,10 +112,18 @@ if 'grafo_exacto' not in st.session_state:
     G.add_edge("V9",  "V9",  weight=3, edge_type='loop')
     G.add_edge("V14", "V14", weight=4, edge_type='loop')
 
-    # === TRAMPAS (callejones sin salida, accesibles desde nodos lejanos) ===
-    G.add_edge("V12", "T1", weight=5, edge_type='straight')   # Tentador, costo bajo
-    G.add_edge("V16", "T2", weight=8, edge_type='straight')   # Parece atajo
-    G.add_edge("V20", "T3", weight=4, edge_type='straight')   # Crueldad máxima
+    # === TRAMPAS CAMUFLADAS (V21, V22, V23 — nombres inocentes, posición central, sin salida) ===
+    # V21: accesible desde V5 y V9 (zona media, parece un hub legítimo con dos entradas)
+    G.add_edge("V5",  "V21", weight=6,  edge_type='straight')   # Costo bajo desde V5
+    G.add_edge("V9",  "V21", weight=4,  edge_type='straight')   # Muy tentador desde V9 — sin salida
+
+    # V22: accesible desde V10 y V14 (zona media-alta, parece puente hacia V18)
+    G.add_edge("V10", "V22", weight=7,  edge_type='straight')   # Parece atajo a zona alta
+    G.add_edge("V14", "V22", weight=5,  edge_type='straight')   # Costo irresistible — sin salida
+
+    # V23: accesible desde V15 y V16 (zona alta, a un paso de la UDES)
+    G.add_edge("V15", "V23", weight=8,  edge_type='straight')   # Parece ruta rápida final
+    G.add_edge("V16", "V23", weight=6,  edge_type='straight')   # Costo tentador — sin salida
 
     st.session_state.grafo_exacto = G
 
@@ -128,9 +136,10 @@ pos = {
     "V13": (8, 8),  "V14": (8, 6),  "V15": (8, 4),  "V16": (8, 2),
     "V17": (10, 7), "V18": (10, 5), "V19": (10, 3), "V20": (10, 1),
     "UDES": (12, 4),
-    "T1": (8, 0),
-    "T2": (10, 0),
-    "T3": (12, 0),
+    # Trampas en medio del grafo, posiciones naturales entre nodos reales
+    "V21": (6,  8.2),   # Entre V8 y V13, zona alta-media — parece nodo de paso
+    "V22": (9,  5.5),   # Entre V14/V15 y V17/V18 — parece puente natural
+    "V23": (10, 2.5),   # Entre V19 y V20 — parece nodo hacia UDES
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
